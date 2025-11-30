@@ -20,11 +20,7 @@ use anyhow::{Context, Result};
 use env_logger::Builder;
 use mimalloc::MiMalloc;
 
-use crate::{
-    config::Config,
-    defs::CONFIG_FILE_DEFAULT,
-    magic_mount::UMOUNT,
-};
+use crate::{config::Config, defs::CONFIG_FILE_DEFAULT, magic_mount::UMOUNT};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -63,15 +59,14 @@ fn init_logger(verbose: bool) {
 }
 
 fn main() -> Result<()> {
-    
     let config = load_config();
 
     let args: Vec<_> = std::env::args().collect();
 
     if args.len() > 1 && args[1] == "scan" {
         let json_output = args.len() > 2 && args[2] == "--json";
-        
-        let modules = scanner::scan_modules(&config.moduledir)?;
+
+        let modules = scanner::scan_modules(&config.moduledir);
 
         if json_output {
             let json = serde_json::to_string(&modules)?;
