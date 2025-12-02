@@ -6,11 +6,9 @@ use std::{
     os::unix::fs::{FileTypeExt, MetadataExt},
     path::{Path, PathBuf},
 };
-
 use anyhow::Result;
 use extattr::lgetxattr;
 use rustix::path::Arg;
-
 use crate::defs::{REPLACE_DIR_FILE_NAME, REPLACE_DIR_XATTR};
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
@@ -47,58 +45,53 @@ pub struct Node {
 impl fmt::Display for NodeFileType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Directory => write!(f, "Directory"),
-            Self::RegularFile => write!(f, "RegularFile"),
-            Self::Symlink => write!(f, "Symlink"),
-            Self::Whiteout => write!(f, "Whiteout"),
+            Self::Directory => write!(f, "DIR"),
+            Self::RegularFile => write!(f, "FILE"),
+            Self::Symlink => write!(f, "LINK"),
+            Self::Whiteout => write!(f, "WHT"),
         }
     }
 }
 
 impl fmt::Debug for Node {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug_node(f, 0)?;
-        let mut kids: Vec<_> = self.children.values().collect();
-        kids.sort_by_key(|n| &n.name);
-        for (i, child) in kids.iter().enumerate() {
-            let is_last = i == kids.len() - 1;
-            child.debug_subtree(f, 1, is_last)?;
+        fn print_tree(
+            node: &Node,
+            f: &mut fmt::Formatter<'_>,
+            prefix: &str,
+            is_last: bool,
+            is_root: bool,
+        ) -> fmt::Result {
+            let connector = if is_root { "" } else if is_last { "└── " } else { "├── " };
+            let name = if node.name.is_empty() { "/" } else { &node.name };
+            
+            let mut flags = Vec::new();
+            if node.replace { flags.push("REPLACE"); }
+            if node.skip { flags.push("SKIP"); }
+            let flag_str = if flags.is_empty() { String::new() } else { format!(" [{}]", flags.join("|")) };
+            
+            let source_str = if let Some(p) = &node.module_path {
+                format!(" -> {}", p.display())
+            } else {
+                String::new()
+            };
+
+            writeln!(f, "{}{}{} [{}]{}{}", prefix, connector, name, node.file_type, flag_str, source_str)?;
+
+            let child_prefix = if is_root { "" } else if is_last { "    " } else { "│   " };
+            let new_prefix = format!("{}{}", prefix, child_prefix);
+            
+            let mut children: Vec<_> = node.children.values().collect();
+            children.sort_by(|a, b| a.name.cmp(&b.name));
+            
+            for (i, child) in children.iter().enumerate() {
+                let is_last_child = i == children.len() - 1;
+                print_tree(child, f, &new_prefix, is_last_child, false)?;
+            }
+            Ok(())
         }
-        Ok(())
-    }
-}
-
-impl Node {
-    fn debug_node(&self, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
-        let indent = "    ".repeat(depth);
-        write!(
-            f,
-            "{}{:?} {} replace={} skip={}",
-            indent, self.file_type, self.name, self.replace, self.skip
-        )
-    }
-
-    fn debug_subtree(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        depth: usize,
-        is_last: bool,
-    ) -> fmt::Result {
-        let indent = "    ".repeat(depth - 1);
-        let branch = if is_last { "└── " } else { "├── " };
-        writeln!(f)?;
-        write!(
-            f,
-            "{}{}{:?} {} replace={} skip={}",
-            indent, branch, self.file_type, self.name, self.replace, self.skip
-        )?;
-
-        let mut kids: Vec<_> = self.children.values().collect();
-        kids.sort_by_key(|n| &n.name);
-        for (i, child) in kids.iter().enumerate() {
-            child.debug_subtree(f, depth + 1, i == kids.len() - 1)?;
-        }
-        Ok(())
+        
+        print_tree(self, f, "", true, true)
     }
 }
 
@@ -109,19 +102,21 @@ impl Node {
     {
         let dir = module_dir.as_ref();
         let mut has_file = false;
-        for entry in dir.read_dir()?.flatten() {
-            let name = entry.file_name().to_string_lossy().to_string();
+        if let Ok(entries) = dir.read_dir() {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
 
-            let node = match self.children.entry(name.clone()) {
-                Entry::Occupied(o) => Some(o.into_mut()),
-                Entry::Vacant(v) => Self::new_module(&name, &entry).map(|it| v.insert(it)),
-            };
+                let node = match self.children.entry(name.clone()) {
+                    Entry::Occupied(o) => Some(o.into_mut()),
+                    Entry::Vacant(v) => Self::new_module(&name, &entry).map(|it| v.insert(it)),
+                };
 
-            if let Some(node) = node {
-                has_file |= if node.file_type == NodeFileType::Directory {
-                    node.collect_module_files(dir.join(&node.name))? || node.replace
-                } else {
-                    true
+                if let Some(node) = node {
+                    has_file |= if node.file_type == NodeFileType::Directory {
+                        node.collect_module_files(dir.join(&node.name))? || node.replace
+                    } else {
+                        true
+                    }
                 }
             }
         }
