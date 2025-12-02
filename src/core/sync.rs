@@ -4,14 +4,17 @@ use std::path::Path;
 use anyhow::Result;
 use crate::{defs, utils, core::inventory::Module};
 
-/// Synchronizes enabled modules from source to the prepared storage.
-/// Implements a smart sync strategy to avoid unnecessary I/O.
 pub fn perform_sync(modules: &[Module], target_base: &Path) -> Result<()> {
     log::info!("Starting smart module sync to {}", target_base.display());
 
     prune_orphaned_modules(modules, target_base)?;
 
     for module in modules {
+        if module.mode == "magic" {
+            log::debug!("Skipping sync for Magic Mount module: {}", module.id);
+            continue;
+        }
+
         let dst = target_base.join(&module.id);
         
         let has_content = defs::BUILTIN_PARTITIONS.iter().any(|p| {

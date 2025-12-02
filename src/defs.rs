@@ -1,5 +1,3 @@
-
-
 pub const FALLBACK_CONTENT_DIR: &str = "/data/adb/meta-hybrid/img_mnt/";
 
 pub const BASE_DIR: &str = "/data/adb/meta-hybrid/";
@@ -23,3 +21,6 @@ pub const SYSTEM_RW_DIR: &str = "/data/adb/meta-hybrid/rw";
 pub const MODULE_PROP_FILE: &str = "/data/adb/modules/meta-hybrid/module.prop";
 
 pub const BUILTIN_PARTITIONS: &[&str] = &["system", "vendor", "product", "system_ext", "odm", "oem"];
+
+pub const REPLACE_DIR_FILE_NAME: &str = ".replace";
+pub const REPLACE_DIR_XATTR: &str = "trusted.overlay.opaque";

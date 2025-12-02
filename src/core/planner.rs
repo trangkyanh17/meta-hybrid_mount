@@ -37,19 +37,23 @@ pub fn generate(
     target_partitions.extend(config.partitions.iter().map(|s| s.as_str()));
 
     for module in modules {
-        let content_path = storage_root.join(&module.id);
+        let mut content_path = storage_root.join(&module.id);
         
-        if !content_path.exists() {
-            log::debug!("Planner: Module {} content missing, skipping", module.id);
-            continue;
-        }
-
         if module.mode == "magic" {
+            // For magic mount, we now use the source path directly (in-place mount)
+            content_path = module.source_path.clone();
+
             if has_meaningful_content(&content_path, &target_partitions) {
                 magic_paths.insert(content_path);
                 magic_ids.insert(module.id.clone());
             }
         } else {
+            // For overlayfs, we use the synced storage path
+            if !content_path.exists() {
+                log::debug!("Planner: Module {} content missing in storage, skipping", module.id);
+                continue;
+            }
+
             let mut participates_in_overlay = false;
 
             for part in &target_partitions {
@@ -67,6 +71,7 @@ pub fn generate(
                 overlay_ids.insert(module.id.clone());
             } else {
                 if has_meaningful_content(&content_path, &target_partitions) {
+                    // Maybe fallback or empty
                 }
             }
         }

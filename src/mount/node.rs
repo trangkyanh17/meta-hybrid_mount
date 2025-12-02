@@ -1,0 +1,208 @@
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    ffi::CString,
+    fmt,
+    fs::{DirEntry, FileType},
+    os::unix::fs::{FileTypeExt, MetadataExt},
+    path::{Path, PathBuf},
+};
+
+use anyhow::Result;
+use extattr::lgetxattr;
+use rustix::path::Arg;
+
+use crate::defs::{REPLACE_DIR_FILE_NAME, REPLACE_DIR_XATTR};
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum NodeFileType {
+    RegularFile,
+    Directory,
+    Symlink,
+    Whiteout,
+}
+
+impl NodeFileType {
+    pub fn from_file_type(file_type: FileType) -> Option<Self> {
+        if file_type.is_file() {
+            Some(Self::RegularFile)
+        } else if file_type.is_dir() {
+            Some(Self::Directory)
+        } else if file_type.is_symlink() {
+            Some(Self::Symlink)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct Node {
+    pub name: String,
+    pub file_type: NodeFileType,
+    pub children: HashMap<String, Self>,
+    pub module_path: Option<PathBuf>,
+    pub replace: bool,
+    pub skip: bool,
+}
+
+impl fmt::Display for NodeFileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Directory => write!(f, "Directory"),
+            Self::RegularFile => write!(f, "RegularFile"),
+            Self::Symlink => write!(f, "Symlink"),
+            Self::Whiteout => write!(f, "Whiteout"),
+        }
+    }
+}
+
+impl fmt::Debug for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug_node(f, 0)?;
+        let mut kids: Vec<_> = self.children.values().collect();
+        kids.sort_by_key(|n| &n.name);
+        for (i, child) in kids.iter().enumerate() {
+            let is_last = i == kids.len() - 1;
+            child.debug_subtree(f, 1, is_last)?;
+        }
+        Ok(())
+    }
+}
+
+impl Node {
+    fn debug_node(&self, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
+        let indent = "    ".repeat(depth);
+        write!(
+            f,
+            "{}{:?} {} replace={} skip={}",
+            indent, self.file_type, self.name, self.replace, self.skip
+        )
+    }
+
+    fn debug_subtree(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        depth: usize,
+        is_last: bool,
+    ) -> fmt::Result {
+        let indent = "    ".repeat(depth - 1);
+        let branch = if is_last { "└── " } else { "├── " };
+        writeln!(f)?;
+        write!(
+            f,
+            "{}{}{:?} {} replace={} skip={}",
+            indent, branch, self.file_type, self.name, self.replace, self.skip
+        )?;
+
+        let mut kids: Vec<_> = self.children.values().collect();
+        kids.sort_by_key(|n| &n.name);
+        for (i, child) in kids.iter().enumerate() {
+            child.debug_subtree(f, depth + 1, i == kids.len() - 1)?;
+        }
+        Ok(())
+    }
+}
+
+impl Node {
+    pub fn collect_module_files<P>(&mut self, module_dir: P) -> Result<bool>
+    where
+        P: AsRef<Path>,
+    {
+        let dir = module_dir.as_ref();
+        let mut has_file = false;
+        for entry in dir.read_dir()?.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            let node = match self.children.entry(name.clone()) {
+                Entry::Occupied(o) => Some(o.into_mut()),
+                Entry::Vacant(v) => Self::new_module(&name, &entry).map(|it| v.insert(it)),
+            };
+
+            if let Some(node) = node {
+                has_file |= if node.file_type == NodeFileType::Directory {
+                    node.collect_module_files(dir.join(&node.name))? || node.replace
+                } else {
+                    true
+                }
+            }
+        }
+
+        Ok(has_file)
+    }
+
+    pub fn dir_is_replace<P>(path: P) -> Result<bool>
+    where
+        P: AsRef<Path>,
+    {
+        if let Ok(v) = lgetxattr(&path, REPLACE_DIR_XATTR) {
+            if String::from_utf8_lossy(&v) == "y" {
+                return Ok(true);
+            }
+        }
+
+        let c_path = CString::new(path.as_ref().as_str()?)?;
+        let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY) };
+
+        if fd < 0 {
+            return Ok(false);
+        }
+
+        let exists = unsafe {
+            let replace = CString::new(REPLACE_DIR_FILE_NAME)?;
+            let ret = libc::faccessat(fd, replace.as_ptr(), libc::F_OK, 0);
+            libc::close(fd);
+            ret
+        };
+
+        if exists == 0 { Ok(true) } else { Ok(false) }
+    }
+
+    pub fn new_root<S>(name: S) -> Self
+    where
+        S: AsRef<str> + Into<String>,
+    {
+        Self {
+            name: name.into(),
+            file_type: NodeFileType::Directory,
+            children: HashMap::default(),
+            module_path: None,
+            replace: false,
+            skip: false,
+        }
+    }
+
+    pub fn new_module<S>(name: &S, entry: &DirEntry) -> Option<Self>
+    where
+        S: AsRef<str> + Into<String>,
+        std::string::String: for<'a> From<&'a S>,
+    {
+        if let Ok(metadata) = entry.metadata() {
+            let path = entry.path();
+            let file_type = if metadata.file_type().is_char_device() && metadata.rdev() == 0 {
+                Some(NodeFileType::Whiteout)
+            } else {
+                NodeFileType::from_file_type(metadata.file_type())
+            };
+            if let Some(file_type) = file_type {
+                let replace = if file_type == NodeFileType::Directory {
+                    if let Ok(s) = Self::dir_is_replace(&path) {
+                        s
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                return Some(Self {
+                    name: name.into(),
+                    file_type,
+                    children: HashMap::default(),
+                    module_path: Some(path),
+                    replace,
+                    skip: false,
+                });
+            }
+        }
+
+        None
+    }
+}
