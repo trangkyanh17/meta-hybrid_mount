@@ -87,7 +87,7 @@ jobs:
           
           sed -i "0,/^version = .*/s//version = \"$CLEAN_VER\"/" Cargo.toml
           
-          sed -i "s/version: '.*',/version: '$TAG_NAME',/" webui/src/lib/store.svelte.js
+          sed -i "s/version: '.*',/version: '$TAG_NAME',/" webui/src/lib/store.svelte.ts
 
       - name: Build Release Package
         run: |
