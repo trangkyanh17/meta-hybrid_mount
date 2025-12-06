@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "meta-hybrid"
-version = "1.0.1-r2"
+version = "1.0.2-r1"
 edition = "2021"
 
 [dependencies]
@@ -21,6 +21,7 @@ chrono = "0.4"
 procfs = "0.17"
 env_logger = "0.11.8"
 mimalloc = { version = "0.1.48", features = ["no_thp", "override"] }
+rayon = "1.10"
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use log::{info, warn};
 use std::path::{Path, PathBuf};
 use std::fs;
+use std::os::fd::AsRawFd;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::ffi::CString;
 
@@ -239,12 +240,9 @@ pub fn mount_overlay(
     upperdir: Option<PathBuf>,
     disable_umount: bool,
 ) -> Result<()> {
-    // info!("Starting robust overlay mount for {target_root}");
-    
-    std::env::set_current_dir(target_root)
-        .with_context(|| format!("failed to chdir to {target_root}"))?;
-    
-    let stock_root = ".";
+    let root_file = fs::File::open(target_root)
+        .with_context(|| format!("failed to open target root {}", target_root))?;
+    let stock_root = format!("/proc/self/fd/{}", root_file.as_raw_fd());
 
     let mounts = Process::myself()?
         .mountinfo()
@@ -261,12 +259,11 @@ pub fn mount_overlay(
     mount_seq.sort();
     mount_seq.dedup();
 
-    mount_overlayfs(module_roots, target_root, upperdir, workdir, target_root, disable_umount)
+    mount_overlayfs(module_roots, &stock_root, upperdir, workdir, target_root, disable_umount)
         .with_context(|| format!("mount overlayfs for root {target_root} failed"))?;
 
     for mount_point in mount_seq {
         let relative = mount_point.replacen(target_root, "", 1);
-        
         let stock_root_relative = format!("{}{}", stock_root, relative);
         
         if !Path::new(&stock_root_relative).exists() {

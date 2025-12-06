@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use anyhow::Result;
+use rayon::prelude::*;
 use crate::{
     conf::config, 
     mount::{magic, overlay}, 
@@ -26,27 +27,40 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
     let mut magic_queue = plan.magic_module_paths.clone();
     
     let mut final_overlay_ids = plan.overlay_module_ids.clone();
-    let mut fallback_ids = Vec::new();
+    
+    let fallback_data: Vec<(Vec<PathBuf>, Vec<String>)> = plan.overlay_ops.par_iter()
+        .map(|op| {
+            let lowerdir_strings: Vec<String> = op.lowerdirs.iter()
+                .map(|p| p.display().to_string())
+                .collect();
+                
+            log::info!("Mounting {} [OVERLAY] ({} layers)", op.target, lowerdir_strings.len());
+            
+            if let Err(e) = overlay::mount_overlay(&op.target, &lowerdir_strings, None, None, config.disable_umount) {
+                log::warn!("OverlayFS failed for {}: {}. Triggering fallback.", op.target, e);
+                
+                let mut local_magic = Vec::new();
+                let mut local_fallback_ids = Vec::new();
 
-    for op in &plan.overlay_ops {
-        let lowerdir_strings: Vec<String> = op.lowerdirs.iter()
-            .map(|p| p.display().to_string())
-            .collect();
-            
-        log::info!("Mounting {} [OVERLAY] ({} layers)", op.target, lowerdir_strings.len());
-        
-        if let Err(e) = overlay::mount_overlay(&op.target, &lowerdir_strings, None, None, config.disable_umount) {
-            log::warn!("OverlayFS failed for {}: {}. Triggering fallback.", op.target, e);
-            
-            for layer_path in &op.lowerdirs {
-                if let Some(root) = extract_module_root(layer_path) {
-                    magic_queue.push(root.clone());
-                    if let Some(id) = extract_id(layer_path) {
-                        fallback_ids.push(id);
+                for layer_path in &op.lowerdirs {
+                    if let Some(root) = extract_module_root(layer_path) {
+                        local_magic.push(root.clone());
+                        if let Some(id) = extract_id(layer_path) {
+                            local_fallback_ids.push(id);
+                        }
                     }
                 }
+                return (local_magic, local_fallback_ids);
             }
-        }
+            
+            (Vec::new(), Vec::new())
+        })
+        .collect();
+
+    let mut fallback_ids = Vec::new();
+    for (paths, ids) in fallback_data {
+        magic_queue.extend(paths);
+        fallback_ids.extend(ids);
     }
 
     if !fallback_ids.is_empty() {
