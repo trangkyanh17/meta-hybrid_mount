@@ -36,15 +36,22 @@ struct DiagnosticIssueJson {
 
 fn load_config(cli: &Cli) -> Result<Config> {
     if let Some(config_path) = &cli.config {
-        return Config::from_file(config_path);
+        return Config::from_file(config_path)
+            .with_context(|| format!("Failed to load config from custom path: {}", config_path.display()));
     }
+    
     match Config::load_default() {
         Ok(config) => Ok(config),
         Err(e) => {
-            if Path::new(CONFIG_FILE_DEFAULT).exists() {
-                eprintln!("Error loading config: {:#}", e);
+            let is_not_found = e.root_cause().downcast_ref::<std::io::Error>()
+                .map(|io_err| io_err.kind() == std::io::ErrorKind::NotFound)
+                .unwrap_or(false);
+
+            if is_not_found {
+                Ok(Config::default())
+            } else {
+                Err(e).context(format!("Failed to load default config from {}", CONFIG_FILE_DEFAULT))
             }
-            Ok(Config::default())
         }
     }
 }
@@ -61,12 +68,15 @@ fn run() -> Result<()> {
     if let Some(command) = &cli.command {
         match command {
             Commands::GenConfig { output } => { 
-                Config::default().save_to_file(output)?; 
+                Config::default().save_to_file(output)
+                    .with_context(|| format!("Failed to save generated config to {}", output.display()))?; 
                 return Ok(()); 
             },
             Commands::ShowConfig => { 
                 let config = load_config(&cli)?;
-                println!("{}", serde_json::to_string(&config)?); 
+                let json = serde_json::to_string(&config)
+                    .context("Failed to serialize config to JSON")?;
+                println!("{}", json); 
                 return Ok(()); 
             },
             Commands::SaveConfig { payload } => {
@@ -76,8 +86,9 @@ fn run() -> Result<()> {
                     .collect::<Result<Vec<u8>, _>>()
                     .context("Failed to decode hex payload")?;
                 let config: Config = serde_json::from_slice(&json_bytes)
-                    .context("Failed to parse config JSON")?;
-                config.save_to_file(CONFIG_FILE_DEFAULT)?;
+                    .context("Failed to parse config JSON payload")?;
+                config.save_to_file(CONFIG_FILE_DEFAULT)
+                    .context("Failed to save config file")?;
                 println!("Configuration saved successfully.");
                 return Ok(());
             },
@@ -90,33 +101,41 @@ fn run() -> Result<()> {
                 let _: inventory::ModuleRules = serde_json::from_slice(&json_bytes)
                     .context("Invalid rules JSON")?;
                 let rules_dir = std::path::Path::new("/data/adb/meta-hybrid/rules");
-                std::fs::create_dir_all(rules_dir)?;
+                std::fs::create_dir_all(rules_dir)
+                    .context("Failed to create rules directory")?;
                 let file_path = rules_dir.join(format!("{}.json", module));
-                std::fs::write(file_path, json_bytes)?;
+                std::fs::write(&file_path, json_bytes)
+                    .with_context(|| format!("Failed to write rules file: {}", file_path.display()))?;
                 println!("Rules for module '{}' saved.", module);
                 return Ok(());
             },
             Commands::Storage => { 
-                storage::print_status()?; 
+                storage::print_status().context("Failed to retrieve storage status")?; 
                 return Ok(()); 
             },
             Commands::Modules => { 
                 let config = load_config(&cli)?;
-                modules::print_list(&config)?; 
+                modules::print_list(&config).context("Failed to list modules")?; 
                 return Ok(()); 
             },
             Commands::Conflicts => {
                 let config = load_config(&cli)?;
-                let module_list = inventory::scan(&config.moduledir, &config)?;
-                let plan = planner::generate(&config, &module_list, &config.moduledir)?;
+                let module_list = inventory::scan(&config.moduledir, &config)
+                    .context("Failed to scan modules for conflict analysis")?;
+                let plan = planner::generate(&config, &module_list, &config.moduledir)
+                    .context("Failed to generate plan for conflict analysis")?;
                 let report = plan.analyze_conflicts();
-                println!("{}", serde_json::to_string(&report.details)?);
+                let json = serde_json::to_string(&report.details)
+                    .context("Failed to serialize conflict report")?;
+                println!("{}", json);
                 return Ok(());
             },
             Commands::Diagnostics => {
                 let config = load_config(&cli)?;
-                let module_list = inventory::scan(&config.moduledir, &config)?;
-                let plan = planner::generate(&config, &module_list, &config.moduledir)?;
+                let module_list = inventory::scan(&config.moduledir, &config)
+                    .context("Failed to scan modules for diagnostics")?;
+                let plan = planner::generate(&config, &module_list, &config.moduledir)
+                    .context("Failed to generate plan for diagnostics")?;
                 let issues = executor::diagnose_plan(&plan);
                 let json_issues: Vec<DiagnosticIssueJson> = issues.into_iter().map(|i| DiagnosticIssueJson {
                     level: match i.level {
@@ -127,7 +146,9 @@ fn run() -> Result<()> {
                     context: i.context,
                     message: i.message,
                 }).collect();
-                println!("{}", serde_json::to_string(&json_issues)?);
+                let json = serde_json::to_string(&json_issues)
+                    .context("Failed to serialize diagnostics report")?;
+                println!("{}", json);
                 return Ok(());
             }
         }
@@ -162,10 +183,12 @@ fn run() -> Result<()> {
             .init();
         
         log::info!(":: DRY-RUN / DIAGNOSTIC MODE ::");
-        let module_list = inventory::scan(&config.moduledir, &config)?;
+        let module_list = inventory::scan(&config.moduledir, &config)
+            .context("Inventory scan failed")?;
         log::info!(">> Inventory: Found {} modules", module_list.len());
         
-        let plan = planner::generate(&config, &module_list, &config.moduledir)?;
+        let plan = planner::generate(&config, &module_list, &config.moduledir)
+            .context("Plan generation failed")?;
         plan.print_visuals();
         
         log::info!(">> Analyzing File Conflicts...");
@@ -207,11 +230,12 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    let _log_guard = utils::init_logging(config.verbose, Path::new(defs::DAEMON_LOG_FILE))?;
+    let _log_guard = utils::init_logging(config.verbose, Path::new(defs::DAEMON_LOG_FILE))
+        .context("Failed to initialize logging")?;
     
     let camouflage_name = utils::random_kworker_name();
     if let Err(e) = utils::camouflage_process(&camouflage_name) {
-        log::warn!("Failed to camouflage process: {}", e);
+        log::warn!("Failed to camouflage process: {:#}", e);
     }
 
     log::info!(">> Initializing Meta-Hybrid Mount Daemon...");
@@ -221,20 +245,25 @@ fn run() -> Result<()> {
         log::warn!("!! Umount is DISABLED via config.");
     }
 
-    utils::ensure_dir_exists(defs::RUN_DIR)?;
+    utils::ensure_dir_exists(defs::RUN_DIR)
+        .with_context(|| format!("Failed to create run directory: {}", defs::RUN_DIR))?;
 
     let mnt_base = PathBuf::from(defs::FALLBACK_CONTENT_DIR);
     let img_path = Path::new(defs::BASE_DIR).join("modules.img");
     
-    let storage_handle = storage::setup(&mnt_base, &img_path, config.force_ext4, &config.mountsource)?;
+    let storage_handle = storage::setup(&mnt_base, &img_path, config.force_ext4, &config.mountsource)
+        .context("Storage backend setup failed")?;
     log::info!(">> Storage Backend: [{}]", storage_handle.mode.to_uppercase());
 
-    let module_list = inventory::scan(&config.moduledir, &config)?;
+    let module_list = inventory::scan(&config.moduledir, &config)
+        .context("Failed to scan module directory")?;
     log::info!(">> Inventory Scan: Found {} enabled modules.", module_list.len());
     
-    sync::perform_sync(&module_list, &storage_handle.mount_point)?;
+    sync::perform_sync(&module_list, &storage_handle.mount_point)
+        .context("Module synchronization failed")?;
 
-    let plan = planner::generate(&config, &module_list, &storage_handle.mount_point)?;
+    let plan = planner::generate(&config, &module_list, &storage_handle.mount_point)
+        .context("Mount plan generation failed")?;
     plan.print_visuals();
 
     let active_mounts: Vec<String> = plan.overlay_ops
@@ -244,7 +273,8 @@ fn run() -> Result<()> {
 
     log::info!(">> Link Start! Executing mount plan...");
     
-    let exec_result = executor::execute(&plan, &config)?;
+    let exec_result = executor::execute(&plan, &config)
+        .context("Mount plan execution failed")?;
 
     let final_magic_ids = exec_result.magic_module_ids;
     
@@ -257,7 +287,7 @@ fn run() -> Result<()> {
                 nuke_active = true;
             },
             Err(e) => {
-                log::warn!("!! Paw Pad failure: {}", e);
+                log::warn!("!! Paw Pad failure: {:#}", e);
             }
         }
     }
@@ -286,7 +316,7 @@ fn run() -> Result<()> {
     );
 
     if let Err(e) = state.save() {
-        log::error!("Failed to save runtime state: {}", e);
+        log::error!("Failed to save runtime state: {:#}", e);
     }
 
     log::info!(">> System operational. Mount sequence complete.");
