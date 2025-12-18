@@ -1,11 +1,13 @@
-## v1.7.2
+## v1.7.5
 
-Changes since v1.7.1:
-* feat(webui): improve config reset ux
-* feat(webui): add config reset functionality
-* Revert "feat: Check CONFIG_TMPFS_XATTR=y runtime support for OverlayFS on tmpfs"
-* chore: add issue template configuration to disable blank issues
-* fix(metainstall): streamline partition handling and cleanup logic
-* fix(scripts): avoid unnecessary mounts caused by /system/<partition> (#53)
-* [skip ci]Enhance bug report template with additional fields for device codename, Android build fingerprint, daemon version, KernelSU manager version, and improved descriptions for better clarity.
-* chore(release): bump version to v1.7.1 [skip ci]
+Changes since v1.7.2:
+* feat(webui): conditionally hide HymoFS UI elements
+* fix: ensure proper formatting and add newline at end of main function
+* feat(hymo): enhance HymoFS integration with new icons and localization updates
+* feat(hymo): add HymoFS tab and integrate status controls
+* add HymoFS API types and methods
+* feat: add backend support for HymoFS introspection and control
+* fix: rename run function to main to resolve missing entry point error
+* feat(hymofs): implement hide_overlay_xattrs and mount_id reordering
+* feat: add hymofs stealth and debug controls
+* chore(release): bump version to v1.7.2 [skip ci]
