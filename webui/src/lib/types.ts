@@ -11,6 +11,7 @@ export interface AppConfig {
   hymofs_stealth: boolean;
   hymofs_debug: boolean;
   logfile?: string;
+  winnowing?: Record<string, string>;
 }
 
 export type MountMode = 'overlay' | 'hymofs' | 'magic' | 'ignore';
@@ -77,9 +78,18 @@ export interface ModeStats {
 }
 
 export interface ConflictEntry {
-  partition: string;
-  relative_path: string;
-  contending_modules: string[];
+  path: string;
+  contenders: string[];
+  selected: string;
+  is_forced: boolean;
+}
+
+export interface Silo {
+  id: string;
+  timestamp: number;
+  label: string;
+  reason: string;
+  config_snapshot: AppConfig;
 }
 
 export interface DiagnosticIssue {

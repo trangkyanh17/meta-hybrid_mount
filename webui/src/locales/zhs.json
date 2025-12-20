@@ -22,7 +22,9 @@
     "config": "配置",
     "modules": "模块",
     "logs": "日志",
-    "info": "关于"
+    "info": "关于",
+    "granary": "粮仓",
+    "winnowing": "风选"
   },
   "status": {
     "storageTitle": "存储空间",

@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use crate::conf::config::Config;
 use crate::defs;
 
@@ -63,7 +63,9 @@ pub fn disengage_ratoon_protocol() {
 }
 
 pub fn create_silo(config: &Config, label: &str, reason: &str) -> Result<String> {
-    fs::create_dir_all(GRANARY_DIR)?;
+    if let Err(e) = fs::create_dir_all(GRANARY_DIR) {
+        log::warn!("Failed to create granary dir: {}", e);
+    }
     
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let id = format!("silo_{}", now);

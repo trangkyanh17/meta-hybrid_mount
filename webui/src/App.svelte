@@ -9,6 +9,8 @@
   import ModulesTab from './routes/ModulesTab.svelte';
   import LogsTab from './routes/LogsTab.svelte';
   import InfoTab from './routes/InfoTab.svelte';
+  import GranaryTab from './routes/GranaryTab.svelte';
+  import WinnowingTab from './routes/WinnowingTab.svelte';
   import './app.css';
   import './layout.css';
   let activeTab = $state('status');
@@ -18,7 +20,7 @@
   let touchStartX = 0;
   let touchStartY = 0;
   let isReady = $state(false);
-  const TABS = ['status', 'config', 'modules', 'logs', 'info'];
+  const TABS = ['status', 'granary', 'winnowing', 'config', 'modules', 'logs', 'info'];
   function switchTab(id: string) {
     activeTab = id;
   }
@@ -67,7 +69,7 @@
       isReady = true;
     }
   });
-  let baseTranslateX = $derived(TABS.indexOf(activeTab) * -20);
+  let baseTranslateX = $derived(TABS.indexOf(activeTab) * -14.28);
 </script>
 <div class="app-root">
   {#if !isReady}
@@ -85,12 +87,15 @@
           ontouchcancel={handleTouchEnd}>
       <div class="swipe-track"
            style:transform={`translateX(calc(${baseTranslateX}% + ${dragOffset}px))`}
+           style:width={`${TABS.length * 100}%`}
            style:transition={isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.5, 1)'}>
-        <div class="swipe-page"><div class="page-scroller"><StatusTab /></div></div>
-        <div class="swipe-page"><div class="page-scroller"><ConfigTab /></div></div>
-        <div class="swipe-page"><div class="page-scroller"><ModulesTab /></div></div>
-        <div class="swipe-page"><div class="page-scroller"><LogsTab /></div></div>
-        <div class="swipe-page"><div class="page-scroller"><InfoTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><StatusTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><GranaryTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><WinnowingTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><ConfigTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><ModulesTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><LogsTab /></div></div>
+        <div class="swipe-page" style:width={`${100 / TABS.length}%`}><div class="page-scroller"><InfoTab /></div></div>
       </div>
     </main>
     <NavBar {activeTab} onTabChange={switchTab} />

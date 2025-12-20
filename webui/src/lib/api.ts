@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG, PATHS } from './constants';
 import { APP_VERSION } from './constants_gen';
 import { MockAPI } from './api.mock';
-import type { AppConfig, Module, StorageStatus, SystemInfo, DeviceInfo, ModuleRules, ConflictEntry, DiagnosticIssue } from './types';
+import type { AppConfig, Module, StorageStatus, SystemInfo, DeviceInfo, ModuleRules, ConflictEntry, DiagnosticIssue, Silo } from './types';
 
 interface KsuExecResult {
   errno: number;
@@ -287,6 +287,36 @@ const RealAPI = {
         await ksuExec('reboot');
     } catch (e) {
         console.error("Reboot failed", e);
+    }
+  },
+  getGranaryList: async (): Promise<Silo[]> => {
+    if (!ksuExec) return [];
+    const cmd = `${PATHS.BINARY} hymo-action granary-list`;
+    try {
+        const { errno, stdout } = await ksuExec(cmd);
+        if (errno === 0 && stdout) {
+            return JSON.parse(stdout);
+        }
+    } catch(e) {
+        console.error("Failed to list granary:", e);
+    }
+    return [];
+  },
+  restoreSilo: async (siloId: string): Promise<void> => {
+    if (!ksuExec) return;
+    const cmd = `${PATHS.BINARY} hymo-action granary-restore --value "${siloId}"`;
+    const { errno, stderr } = await ksuExec(cmd);
+    if (errno !== 0) {
+        throw new Error(`Restore failed: ${stderr}`);
+    }
+  },
+  setWinnowingRule: async (path: string, moduleId: string): Promise<void> => {
+    if (!ksuExec) return;
+    const val = `${path}:${moduleId}`;
+    const cmd = `${PATHS.BINARY} hymo-action winnow-set --value "${val}"`;
+    const { errno, stderr } = await ksuExec(cmd);
+    if (errno !== 0) {
+        throw new Error(`Winnow set failed: ${stderr}`);
     }
   }
 };

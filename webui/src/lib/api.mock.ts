@@ -1,6 +1,6 @@
 import { APP_VERSION } from './constants_gen';
 import { DEFAULT_CONFIG } from './constants';
-import type { AppConfig, DeviceInfo, Module, StorageStatus, SystemInfo, ModuleRules, ConflictEntry, DiagnosticIssue } from './types';
+import type { AppConfig, DeviceInfo, Module, StorageStatus, SystemInfo, ModuleRules, ConflictEntry, DiagnosticIssue, Silo } from './types';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -118,8 +118,8 @@ export const MockAPI = {
   async getConflicts(): Promise<ConflictEntry[]> {
     await delay(500);
     return [
-        { partition: "system", relative_path: "etc/hosts", contending_modules: ["magisk_module_1", "overlay_module_2"] },
-        { partition: "vendor", relative_path: "etc/audio_policy_configuration.xml", contending_modules: ["sound_mod", "dolby"] }
+        { path: "/system/etc/hosts", contenders: ["magisk_module_1", "overlay_module_2"], selected: "magisk_module_1", is_forced: false },
+        { path: "/vendor/etc/audio_policy_configuration.xml", contenders: ["sound_mod", "dolby"], selected: "sound_mod", is_forced: true }
     ];
   },
   async getDiagnostics(): Promise<DiagnosticIssue[]> {
@@ -128,6 +128,33 @@ export const MockAPI = {
           { level: "Info", context: "System", message: "OverlayFS is available" },
           { level: "Warning", context: "magisk_module_1", message: "Dead absolute symlink: system/bin/test -> /dev/null" }
       ];
+  },
+  async getGranaryList(): Promise<Silo[]> {
+    await delay(400);
+    return [
+        { 
+            id: "silo_1715000000", 
+            timestamp: 1715000000, 
+            label: "Boot Backup", 
+            reason: "Automatic Pre-Mount", 
+            config_snapshot: { ...DEFAULT_CONFIG } 
+        },
+        { 
+            id: "silo_1715003600", 
+            timestamp: 1715003600, 
+            label: "Manual Save", 
+            reason: "User Action", 
+            config_snapshot: { ...DEFAULT_CONFIG } 
+        }
+    ];
+  },
+  async restoreSilo(siloId: string): Promise<void> {
+    await delay(500);
+    console.log(`[Mock] Restored silo: ${siloId}`);
+  },
+  async setWinnowingRule(path: string, moduleId: string): Promise<void> {
+    await delay(300);
+    console.log(`[Mock] Winnow rule set: ${path} -> ${moduleId}`);
   },
   openLink(url: string): void {
     console.log('[Mock] Opening link:', url);

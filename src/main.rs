@@ -81,7 +81,7 @@ fn main() -> Result<()> {
                 return Ok(()); 
             },
             Commands::SaveConfig { payload } => {
-                // Before saving, create a Granary snapshot for safety
+                // Pre-save backup
                 if let Ok(old_config) = load_config(&cli) {
                     if let Err(e) = granary::create_silo(&old_config, "Auto-Backup", "Pre-WebUI Save") {
                         log::warn!("Failed to create Granary backup: {}", e);
@@ -134,9 +134,8 @@ fn main() -> Result<()> {
                     .context("Failed to generate plan for conflict analysis")?;
                 let report = plan.analyze_conflicts();
                 
-                // Winnowing Analysis
                 let winnowed = winnow::sift_conflicts(report.details, &config.winnowing);
-                
+
                 let json = serde_json::to_string(&winnowed)
                     .context("Failed to serialize conflict report")?;
                 println!("{}", json);
@@ -217,7 +216,6 @@ fn main() -> Result<()> {
                         }
                     },
                     "winnow-set" => {
-                        // value format: "/path/to/file:module_id"
                         if let Some(val) = value {
                             if let Some((path, id)) = val.split_once(':') {
                                 config.winnowing.set_rule(path, id);
@@ -233,8 +231,6 @@ fn main() -> Result<()> {
         }
     }
 
-    // --- Boot Sequence ---
-
     let mut config = load_config(&cli)?;
     config.merge_with_cli(
         cli.moduledir.clone(), 
@@ -244,7 +240,6 @@ fn main() -> Result<()> {
         cli.dry_run,
     );
 
-    // Ratoon Protocol Check (Bootloop prevention)
     if !config.dry_run {
         if let Err(e) = granary::engage_ratoon_protocol() {
             log::error!("Failed to engage Ratoon Protocol: {}", e);
@@ -285,7 +280,6 @@ fn main() -> Result<()> {
         } else {
             log::warn!("!! DETECTED {} FILE CONFLICTS !!", report.details.len());
             
-            // Apply Winnowing Logic to log output
             let winnowed = winnow::sift_conflicts(report.details, &config.winnowing);
             for c in winnowed {
                 let status = if c.is_forced { "(FORCED)" } else { "" };
@@ -343,7 +337,6 @@ fn main() -> Result<()> {
     let mnt_base = PathBuf::from(defs::FALLBACK_CONTENT_DIR);
     let img_path = Path::new(defs::BASE_DIR).join("modules.img");
     
-    // Create pre-boot snapshot in Granary
     if let Err(e) = granary::create_silo(&config, "Boot Backup", "Automatic Pre-Mount") {
         log::warn!("Granary: Failed to create boot snapshot: {}", e);
     }

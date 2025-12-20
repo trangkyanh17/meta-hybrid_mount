@@ -1,37 +1,8 @@
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
+use crate::conf::config::WinnowingTable;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WinnowingTable {
-    #[serde(flatten)]
-    pub rules: HashMap<String, String>, 
-}
-
-impl Default for WinnowingTable {
-    fn default() -> Self {
-        Self {
-            rules: HashMap::new(),
-        }
-    }
-}
-
-impl WinnowingTable {
-    pub fn get_preferred_module(&self, file_path: &Path) -> Option<String> {
-        let path_str = file_path.to_string_lossy().to_string();
-        self.rules.get(&path_str).cloned()
-    }
-
-    pub fn set_rule(&mut self, file_path: &str, module_id: &str) {
-        self.rules.insert(file_path.to_string(), module_id.to_string());
-    }
-    
-    pub fn remove_rule(&mut self, file_path: &str) {
-        self.rules.remove(file_path);
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChaffConflict {
     pub path: PathBuf,
     pub contenders: Vec<String>,

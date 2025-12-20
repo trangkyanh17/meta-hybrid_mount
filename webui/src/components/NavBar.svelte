@@ -13,15 +13,15 @@
   let { activeTab, onTabChange }: Props = $props();
   let navContainer = $state<HTMLElement>();
   let tabRefs = $state<Record<string, HTMLButtonElement>>({});
-
   const TABS = [
     { id: 'status', icon: ICONS.home },
+    { id: 'granary', icon: "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,12.5A2.5,2.5 0 0,1 9.5,10A2.5,2.5 0 0,1 12,7.5A2.5,2.5 0 0,1 14.5,10A2.5,2.5 0 0,1 12,12.5Z" },
+    { id: 'winnowing', icon: "M2,21H22L12,3L2,21M12,18H10V16H12V18M12,14H10V10H12V14Z" },
     { id: 'config', icon: ICONS.settings },
     { id: 'modules', icon: ICONS.modules },
     { id: 'logs', icon: ICONS.description },
     { id: 'info', icon: ICONS.info }
   ];
-
   $effect(() => {
     if (activeTab && tabRefs[activeTab] && navContainer) {
       const tab = tabRefs[activeTab];
@@ -38,7 +38,8 @@
   });
 </script>
 
-<nav class="bottom-nav" bind:this={navContainer} style:padding-bottom={store.fixBottomNav ? '48px' : 'max(16px, env(safe-area-inset-bottom, 0px))'}>
+<nav class="bottom-nav" bind:this={navContainer} style:padding-bottom={store.fixBottomNav ?
+'48px' : 'max(16px, env(safe-area-inset-bottom, 0px))'}>
   {#each TABS as tab (tab.id)}
     <button 
       class="nav-tab {activeTab === tab.id ? 'active' : ''}" 
@@ -54,7 +55,7 @@
           </svg>
         </md-icon>
       </div>
-      <span class="label">{store.L.tabs[tab.id as keyof typeof store.L.tabs]}</span>
+      <span class="label">{store.L.tabs[tab.id as keyof typeof store.L.tabs] || tab.id}</span>
     </button>
   {/each}
 </nav>
