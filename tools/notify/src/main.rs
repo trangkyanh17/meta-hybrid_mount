@@ -95,6 +95,10 @@ fn main() {
             return;
         }
 
+        if response.contains("\"ok\":false") {
+            println!("⚠️ Telegram API rejected: {}", response);
+        }
+
         if response.contains("\"error_code\":400") && response.contains("TOPIC_CLOSED") {
             if attempt < max_retries - 1 {
                 if let Some(tid) = topic_id {
@@ -112,8 +116,16 @@ fn main() {
             }
         }
 
-        eprintln!("❌ Storage failed: {}", response);
-        exit(1);
+        eprintln!(
+            "❌ Storage failed (Attempt {}/{}): {}",
+            attempt + 1,
+            max_retries,
+            response
+        );
+        if attempt == max_retries - 1 {
+            exit(1);
+        }
+        thread::sleep(Duration::from_secs(2));
     }
 }
 
@@ -130,10 +142,17 @@ fn get_git_commit_message() -> String {
 
 fn run_curl(args: &[String]) -> (bool, String) {
     match Command::new("curl").args(["-s", "-S"]).args(args).output() {
-        Ok(output) => (
-            output.status.success(),
-            String::from_utf8_lossy(&output.stdout).to_string(),
-        ),
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+            if output.status.success() {
+                (true, stdout)
+            } else {
+                let err_msg = if !stderr.is_empty() { stderr } else { stdout };
+                (false, err_msg)
+            }
+        }
         Err(e) => (false, e.to_string()),
     }
 }
