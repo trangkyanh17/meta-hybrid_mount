@@ -64,6 +64,7 @@ impl OryzaEngine<Init> {
             img_path,
             &self.config.moduledir,
             self.config.force_ext4,
+            self.config.use_erofs,
             &self.config.mountsource,
         )?;
 

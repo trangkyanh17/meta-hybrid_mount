@@ -54,10 +54,28 @@ pub fn setup(
     img_path: &Path,
     moduledir: &Path,
     force_ext4: bool,
+    use_erofs: bool,
     mount_source: &str,
 ) -> Result<StorageHandle> {
     if utils::is_mounted(mnt_base) {
         let _ = unmount(mnt_base, UnmountFlags::DETACH);
+    }
+
+    if use_erofs && utils::is_erofs_supported() {
+        let erofs_path = img_path.with_extension("erofs");
+        if setup_erofs_image(mnt_base, &erofs_path, moduledir).is_ok() {
+            if img_path.exists() {
+                log::info!(
+                    "EROFS mode active. Removing unused ext4 image: {}",
+                    img_path.display()
+                );
+                let _ = fs::remove_file(img_path);
+            }
+            return Ok(StorageHandle {
+                mount_point: mnt_base.to_path_buf(),
+                mode: "erofs".to_string(),
+            });
+        }
     }
 
     if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
@@ -69,6 +87,11 @@ pub fn setup(
             if let Err(e) = fs::remove_file(img_path) {
                 log::warn!("Failed to remove unused modules.img: {}", e);
             }
+        }
+
+        let erofs_path = img_path.with_extension("erofs");
+        if erofs_path.exists() {
+            let _ = fs::remove_file(erofs_path);
         }
 
         return Ok(StorageHandle {
@@ -93,6 +116,18 @@ fn try_setup_tmpfs(target: &Path, mount_source: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+fn setup_erofs_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<()> {
+    if !img_path.exists() {
+        if let Some(parent) = img_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        log::info!("Creating EROFS image at {}", img_path.display());
+        utils::create_erofs_image(moduledir, img_path)?;
+    }
+
+    utils::mount_erofs_image(img_path, target)
 }
 
 fn setup_ext4_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<StorageHandle> {
