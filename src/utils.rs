@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::{
-    ffi::{CStr, CString},
+    ffi::CString,
     fmt as std_fmt,
     fs::{self, File, create_dir_all, remove_dir_all, remove_file, write},
     io::Write,

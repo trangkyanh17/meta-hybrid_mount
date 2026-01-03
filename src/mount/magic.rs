@@ -1,6 +1,9 @@
+// Copyright 2025 Meta-Hybrid Mount Authors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self, DirEntry, create_dir, create_dir_all, read_dir, read_link},
+    fs::{self, DirEntry, create_dir, read_dir, read_link},
     os::unix::fs::{MetadataExt, symlink},
     path::{Path, PathBuf},
     sync::atomic::AtomicU32,
@@ -84,12 +87,11 @@ fn process_module(
         return Ok((root, system));
     }
 
-    // Validate module ID like refactored version
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        if let Err(e) = validate_module_id(name) {
-            log::warn!("Skipping invalid module {}: {}", name, e);
-            return Ok((root, system));
-        }
+    if let Some(name) = path.file_name().and_then(|n| n.to_str())
+        && let Err(e) = validate_module_id(name)
+    {
+        log::warn!("Skipping invalid module {}: {}", name, e);
+        return Ok((root, system));
     }
 
     let is_excluded = |part: &str| -> bool {
@@ -387,7 +389,7 @@ impl MagicMount {
         }
 
         // Process remaining children (new files/dirs)
-        for (_, node) in &self.node.children {
+        for node in self.node.children.values() {
             if !node.skip {
                 Self::new(
                     node,

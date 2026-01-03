@@ -3,12 +3,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use log::{info, warn};
 use procfs::process::Process;
 use rustix::{fd::AsFd, fs::CWD, mount::*};
 
-use crate::defs::{KSU_OVERLAY_SOURCE, SYSTEM_RW_DIR};
+use crate::defs::KSU_OVERLAY_SOURCE;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::try_umount::send_unmountable;
 
@@ -188,6 +188,7 @@ pub fn mount_overlay(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn umount_dir(src: impl AsRef<Path>) -> Result<()> {
     unmount(src.as_ref(), UnmountFlags::DETACH)
         .with_context(|| format!("Failed to umount {}", src.as_ref().display()))?;
