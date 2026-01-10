@@ -396,24 +396,6 @@ pub fn mount_tmpfs(target: &Path, source: &str) -> Result<()> {
     Ok(())
 }
 
-fn find_system_binary(name: &str) -> String {
-    let paths = [
-        "/system/bin",
-        "/sbin",
-        "/usr/bin",
-        "/bin",
-        "/vendor/bin",
-    ];
-
-    for dir in paths {
-        let p = Path::new(dir).join(name);
-        if p.exists() {
-            return p.to_string_lossy().into_owned();
-        }
-    }
-    name.to_string()
-}
-
 pub fn mount_image(image_path: &Path, target: &Path) -> Result<()> {
     ensure_dir_exists(target)?;
     lsetfilecon(image_path, "u:object_r:ksu_file:s0").ok();
