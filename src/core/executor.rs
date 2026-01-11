@@ -13,7 +13,6 @@ use crate::{
         planner::MountPlan,
         storage::{OverlayLayout, StorageHandle},
     },
-    defs,
     mount::{magic_mount, overlayfs},
     utils,
 };

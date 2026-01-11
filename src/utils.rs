@@ -1,8 +1,8 @@
 use std::{
     ffi::CString,
     fmt as std_fmt,
-    fs::{File, create_dir_all, remove_dir_all, remove_file, write},
-    io::{ErrorKind, Write},
+    fs::{self, File, create_dir_all, remove_dir_all, remove_file, write},
+    io::Write,
     os::unix::{
         ffi::OsStrExt,
         fs::{FileTypeExt, MetadataExt, PermissionsExt, symlink},
@@ -13,7 +13,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use anyhow::{Context, Error, Result, bail};
+use anyhow::{Context, Result, bail};
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use extattr::{Flags as XattrFlags, lgetxattr, llistxattr, lsetxattr};
 use procfs::process::Process;
