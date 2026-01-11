@@ -8,11 +8,13 @@ use anyhow::{Context, Result, anyhow};
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use rustix::mount::{UnmountFlags, unmount};
 
+#[allow(dead_code)]
 pub struct AutoMountExt4 {
     target: String,
     auto_umount: bool,
 }
 
+#[allow(dead_code)]
 impl AutoMountExt4 {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     pub fn try_new(source: &str, target: &str, auto_umount: bool) -> Result<Self> {
@@ -71,7 +73,6 @@ pub fn mount_image(src: &str, target: &str, _autodrop: bool) -> Result<()> {
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn mount_ext4(source: impl AsRef<Path>, target: impl AsRef<Path>) -> Result<()> {
-    // Fallback to std::process::Command to avoid 'loopdev' dependency issues
     let status = Command::new("mount")
         .args(["-t", "ext4", "-o", "loop,rw,noatime"])
         .arg(source.as_ref())

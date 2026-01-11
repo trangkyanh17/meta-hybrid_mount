@@ -1,6 +1,3 @@
-// Copyright 2025 Meta-Hybrid Mount Authors
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 use std::{
     collections::HashSet,
     fs::{self},
@@ -90,6 +87,7 @@ impl ModuleInfo {
     }
 }
 
+#[allow(dead_code)]
 pub struct ModuleFile {
     pub relative_path: PathBuf,
     pub real_path: PathBuf,
@@ -99,6 +97,7 @@ pub struct ModuleFile {
     pub is_replace_file: bool,
 }
 
+#[allow(dead_code)]
 impl ModuleFile {
     pub fn new(root: &Path, relative: &Path) -> Result<Self> {
         let real_path = root.join(relative);

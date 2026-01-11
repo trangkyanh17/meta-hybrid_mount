@@ -83,6 +83,7 @@ pub fn mount_overlayfs(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn mount_devpts(dest: impl AsRef<Path>) -> Result<()> {
     create_dir(dest.as_ref())?;
     mount(
@@ -96,6 +97,7 @@ pub fn mount_devpts(dest: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn mount_tmpfs(dest: impl AsRef<Path>) -> Result<()> {
     tracing::info!("mount tmpfs on {}", dest.as_ref().display());
     match fsopen("tmpfs", FsOpenFlags::FSOPEN_CLOEXEC) {
@@ -191,14 +193,12 @@ fn mount_overlay_child(
         if path.is_dir() {
             lower_dirs.push(lower_dir);
         } else if path.exists() {
-            // stock root has been blocked by this file
             return Ok(());
         }
     }
     if lower_dirs.is_empty() {
         return Ok(());
     }
-    // merge modules and stock
     if let Err(e) = mount_overlayfs(&lower_dirs, stock_root, None, None, mount_point) {
         tracing::warn!("failed: {:#}, fallback to bind mount", e);
         bind_mount(stock_root, mount_point)?;
@@ -216,7 +216,6 @@ pub fn mount_overlay(
     std::env::set_current_dir(root).with_context(|| format!("failed to chdir to {root}"))?;
     let stock_root = ".";
 
-    // collect child mounts before mounting the root
     let mounts = Process::myself()?
         .mountinfo()
         .with_context(|| "get mountinfo")?;

@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod overlayfs;
 pub mod utils;
 
@@ -10,8 +12,8 @@ use anyhow::{Result, bail};
 
 use crate::defs;
 
+#[allow(dead_code)]
 pub fn mount_systemlessly(module_id: HashSet<String>, extra_partitions: &[String]) -> Result<()> {
-    // construct overlay mount params
     let module_dir = Path::new(defs::MODULES_DIR);
     let dir = module_dir.read_dir();
     let Ok(dir) = dir else {
@@ -60,9 +62,8 @@ pub fn mount_systemlessly(module_id: HashSet<String>, extra_partitions: &[String
         }
 
         for part in &partition {
-            // if /partition is a mountpoint, we would move it to $MODPATH/$partition when install
-            // otherwise it must be a symlink and we don't need to overlay!
             let part_path = Path::new(&module).join(part);
+            #[allow(clippy::collapsible_if)]
             if part_path.is_dir() {
                 if let Some(v) = partition_lowerdir.get_mut(*part) {
                     v.push(format!("{}", part_path.display()));
@@ -71,12 +72,10 @@ pub fn mount_systemlessly(module_id: HashSet<String>, extra_partitions: &[String
         }
     }
 
-    // mount /system first
     if let Err(e) = mount_partition("system", &system_lowerdir) {
         tracing::warn!("mount system failed: {:#}", e);
     }
 
-    // mount other partitions
     for (k, v) in partition_lowerdir {
         if let Err(e) = mount_partition(k.clone(), &v) {
             tracing::warn!("mount {k} failed: {:#}", e);
@@ -86,6 +85,7 @@ pub fn mount_systemlessly(module_id: HashSet<String>, extra_partitions: &[String
     Ok(())
 }
 
+#[allow(dead_code)]
 fn mount_partition<S>(partition_name: S, lowerdir: &Vec<String>) -> Result<()>
 where
     S: AsRef<str>,
@@ -98,7 +98,6 @@ where
 
     let partition = format!("/{partition_name}");
 
-    // if /partition is a symlink and linked to /system/partition, then we don't need to overlay it separately
     if Path::new(&partition).read_link().is_ok() {
         tracing::warn!("partition: {partition} is a symlink");
         return Ok(());

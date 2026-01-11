@@ -21,6 +21,7 @@ pub struct ExecutionResult {
 }
 
 pub enum DiagnosticLevel {
+    #[allow(dead_code)]
     Info,
     Warning,
     Critical,
@@ -173,6 +174,7 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
             }
 
             #[cfg(any(target_os = "linux", target_os = "android"))]
+            #[allow(clippy::collapsible_if)]
             if !config.disable_umount {
                 if let Err(e) = crate::try_umount::send_unmountable(&op.target) {
                     tracing::warn!("Failed to schedule unmount for {}: {}", op.target, e);
