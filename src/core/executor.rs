@@ -1,6 +1,3 @@
-// Copyright 2025 Meta-Hybrid Mount Authors
-// SPDX-License-Identifier: GPL-3.0-or-later
-
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -14,7 +11,7 @@ use crate::{
     conf::config,
     core::planner::MountPlan,
     defs,
-    mount::{magic, overlay},
+    mount::{magic_mount, overlayfs},
     utils,
 };
 
@@ -24,7 +21,6 @@ pub struct ExecutionResult {
 }
 
 pub enum DiagnosticLevel {
-    #[allow(dead_code)]
     Info,
     Warning,
     Critical,
@@ -113,7 +109,6 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
 
     tracing::info!(">> Phase 1: OverlayFS Execution...");
 
-    // Changed from par_iter() to iter() to ensure thread safety when modifying CWD
     let overlay_results: Vec<OverlayResult> = plan
         .overlay_ops
         .iter()
@@ -144,12 +139,11 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
                 lowerdir_strings.len()
             );
 
-            if let Err(e) = overlay::mount_overlay(
+            if let Err(e) = overlayfs::overlayfs::mount_overlay(
                 &op.target,
                 &lowerdir_strings,
                 work_opt,
                 upper_opt,
-                config.disable_umount,
             ) {
                 tracing::warn!(
                     "OverlayFS failed for {}: {}. Triggering fallback.",
@@ -176,6 +170,13 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
                     fallback_ids: local_fallback_ids,
                     success_records: Vec::new(),
                 };
+            }
+
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            if !config.disable_umount {
+                if let Err(e) = crate::try_umount::send_unmountable(&op.target) {
+                    tracing::warn!("Failed to schedule unmount for {}: {}", op.target, e);
+                }
             }
 
             let mut successes = Vec::new();
@@ -214,16 +215,19 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
     magic_queue.dedup();
 
     let mut final_magic_ids = Vec::new();
+    let mut magic_need_ids = HashSet::new();
+
+    for path in &magic_queue {
+        if let Some(name) = path.file_name() {
+            let name_str = name.to_string_lossy().to_string();
+            final_magic_ids.push(name_str.clone());
+            magic_need_ids.insert(name_str);
+        }
+    }
 
     if !magic_queue.is_empty() {
         let tempdir = utils::select_temp_dir()?;
         let _ = crate::try_umount::TMPFS.set(tempdir.to_string_lossy().to_string());
-
-        for path in &magic_queue {
-            if let Some(name) = path.file_name() {
-                final_magic_ids.push(name.to_string_lossy().to_string());
-            }
-        }
 
         tracing::info!(
             ">> Phase 2: Magic Mount (Fallback) using {}",
@@ -234,22 +238,24 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
             std::fs::create_dir_all(&tempdir)?;
         }
 
-        utils::mount_tmpfs(&tempdir, "tmpfs")?;
+        let module_dir = Path::new(&config.hybrid_mnt_dir);
 
-        if let Err(e) = magic::mount_partitions(
+        if let Err(e) = magic_mount::magic_mount(
             &tempdir,
-            &magic_queue,
+            module_dir,
             &config.mountsource,
             &config.partitions,
-            global_success_map,
-            config.disable_umount,
+            magic_need_ids,
+            !config.disable_umount,
         ) {
             tracing::error!("Magic Mount critical failure: {:#}", e);
 
             final_magic_ids.clear();
         }
 
-        let _ = rustix::mount::unmount(&tempdir, UnmountFlags::DETACH);
+        if tempdir.exists() {
+            let _ = rustix::mount::unmount(&tempdir, UnmountFlags::DETACH);
+        }
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
