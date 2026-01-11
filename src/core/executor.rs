@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::Result;
-use rustix::mount::UnmountFlags;
 use walkdir::WalkDir;
 
 use crate::{

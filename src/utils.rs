@@ -7,7 +7,7 @@ use std::{
         ffi::OsStrExt,
         fs::{FileTypeExt, MetadataExt, PermissionsExt, symlink},
     },
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
     sync::{OnceLock, atomic::AtomicBool},
     time::{SystemTime, UNIX_EPOCH},
@@ -31,8 +31,6 @@ use tracing_subscriber::{
     registry::LookupSpan,
     util::SubscriberInitExt,
 };
-
-use crate::defs::{self, TMPFS_CANDIDATES};
 
 const SELINUX_XATTR: &str = "security.selinux";
 const OVERLAY_OPAQUE_XATTR: &str = "trusted.overlay.opaque";
