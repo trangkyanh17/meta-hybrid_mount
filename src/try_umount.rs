@@ -23,7 +23,9 @@ where
     }
 
     let path_str = target.as_ref().to_string_lossy().to_string();
-    let mut history = HISTORY.lock().unwrap();
+    let mut history = HISTORY
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Failed to lock history"))?;
 
     if history.contains(&path_str) {
         tracing::debug!("Ignored duplicate unmount request: {}", path_str);
@@ -31,7 +33,9 @@ where
     }
 
     history.insert(path_str);
-    LIST.lock().unwrap().add(target);
+    LIST.lock()
+        .map_err(|_| anyhow::anyhow!("Failed to lock unmount list"))?
+        .add(target);
     Ok(())
 }
 
