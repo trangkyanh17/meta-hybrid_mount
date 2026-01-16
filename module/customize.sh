@@ -32,6 +32,42 @@ if [ ! -f "$BASE_DIR/config.toml" ]; then
   cat "$MODPATH/config.toml" >"$BASE_DIR/config.toml"
 fi
 
+KEY_volume_detect() {
+  ui_print " "
+  ui_print "========================================"
+  ui_print "      Select Default Mount Mode      "
+  ui_print "========================================"
+  ui_print "  Volume Up (+): OverlayFS"
+  ui_print "  Volume Down (-): Magic Mount"
+  ui_print " "
+  ui_print "  Defaulting to OverlayFS in 10 seconds"
+  ui_print "========================================"
+  local timeout=10
+  local start_time=$(date +%s)
+  local chosen_mode="overlay"
+  while true; do
+    local current_time=$(date +%s)
+    if [ $((current_time - start_time)) -ge $timeout ]; then
+      ui_print "- Timeout: Selected OverlayFS"
+      break
+    fi
+    local key_event=$(timeout 0.5 getevent -l 2>/dev/null)
+    if echo "$key_event" | grep -q "KEY_VOLUMEUP"; then
+      chosen_mode="overlay"
+      ui_print "- Key Detected: Selected OverlayFS"
+      break
+    elif echo "$key_event" | grep -q "KEY_VOLUMEDOWN"; then
+      chosen_mode="magic"
+      ui_print "- Key Detected: Selected Magic Mount"
+      break
+    fi
+  done
+  ui_print "- Configured mode: $chosen_mode"
+  sed -i '/default_mode/d' "$BASE_DIR/config.toml"
+  echo "default_mode = \"$chosen_mode\"" >> "$BASE_DIR/config.toml"
+}
+KEY_volume_detect
+
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$BIN_TARGET" 0 0 0755
 set_perm "$MODPATH/tools/mkfs.erofs" 0 0 0755

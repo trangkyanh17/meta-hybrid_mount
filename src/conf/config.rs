@@ -43,6 +43,14 @@ pub enum OverlayMode {
     Erofs,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DefaultMode {
+    #[default]
+    Overlay,
+    Magic,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(default = "default_moduledir")]
@@ -66,6 +74,8 @@ pub struct Config {
     pub granary: GranaryConfig,
     #[serde(default = "default_hybrid_mnt_dir")]
     pub hybrid_mnt_dir: String,
+    #[serde(default)]
+    pub default_mode: DefaultMode,
 }
 
 fn default_hybrid_mnt_dir() -> String {
@@ -115,6 +125,7 @@ impl Default for Config {
             dry_run: false,
             granary: GranaryConfig::default(),
             hybrid_mnt_dir: default_hybrid_mnt_dir(),
+            default_mode: DefaultMode::default(),
         }
     }
 }
