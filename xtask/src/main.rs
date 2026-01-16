@@ -129,7 +129,7 @@ fn build_full(
     let output_dir = Path::new("output");
     let stage_dir = output_dir.join("staging");
     if output_dir.exists() {
-        fs::remove_dir_all(&output_dir)?;
+        fs::remove_dir_all(output_dir)?;
     }
     fs::create_dir_all(&stage_dir)?;
     let version = get_version()?;
@@ -168,7 +168,7 @@ fn build_full(
     println!(":: Copying module scripts...");
     let module_src = Path::new("module");
     let options = dir::CopyOptions::new().overwrite(true).content_only(true);
-    dir::copy(&module_src, &stage_dir, &options)?;
+    dir::copy(module_src, &stage_dir, &options)?;
     let gitignore = stage_dir.join(".gitignore");
     if gitignore.exists() {
         fs::remove_file(gitignore)?;
@@ -189,7 +189,7 @@ fn build_full(
         let abs_cert = cert_path;
 
         if abs_key_enc.exists() && abs_cert.exists() {
-            decrypt_and_sign(&zip_file, &abs_key_enc, &abs_cert, &password)?;
+            decrypt_and_sign(&zip_file, abs_key_enc, abs_cert, &password)?;
         } else {
             println!(":: Skipping signature: private.enc or cert.pem not found at root.");
         }
@@ -256,14 +256,14 @@ fn build_webui(version: &str) -> Result<()> {
     let webui_dir = Path::new("webui");
     let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
     let status = Command::new(npm)
-        .current_dir(&webui_dir)
+        .current_dir(webui_dir)
         .arg("install")
         .status()?;
     if !status.success() {
         anyhow::bail!("npm install failed");
     }
     let status = Command::new(npm)
-        .current_dir(&webui_dir)
+        .current_dir(webui_dir)
         .args(["run", "build"])
         .status()?;
     if !status.success() {
@@ -300,7 +300,7 @@ export const BUILTIN_PARTITIONS = ["system", "vendor", "product", "system_ext", 
 
 fn compile_core(release: bool, arch: Arch) -> Result<()> {
     let mut cmd = Command::new("cargo");
-    cmd.args(&[
+    cmd.args([
         "ndk",
         "--platform",
         "31",
