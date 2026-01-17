@@ -1,14 +1,12 @@
-## v2.0.71
+## v2.0.72
 
-Changes since v2.0.7:
-* ci: fix no has binaries in output zip
-* chore: update license headers [skip ci]
-* fix(magic_mount): trying fix magic mount scan modules is empty (#121)
-* chore: make cargo clippy happy
-* ci: dropped lints check in ci progress
-* ci: fix non-install `cargo-ndk`
-* refactor(xtask): use `cargo-ndk` to build cross binarys
-* fix(config): fix set alias
-* feat(xtask): bump edition to 2024
-* feat(xtask): dropped Riscv64 support
-* chore(release): bump version to v2.0.7 [skip ci]
+Changes since v2.0.71:
+* fix: fix build
+* Revert "fix(magic_mount): trying fix magic mount scan modules is empty (#121)"
+* refactror(logger): use new way to init logger
+* chore: update lints workflow to include push events
+* chore(deps): bump
+* build: disbale opt-level = "z"
+* chore(deps): bump chrono from 0.4.42 to 0.4.43 (#135)
+* chore(deps): bump ksu from `47459ed` to `8516151` (#136)
+* chore(release): bump version to v2.0.71 [skip ci]
