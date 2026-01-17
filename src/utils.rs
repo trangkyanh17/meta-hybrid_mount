@@ -287,56 +287,42 @@ pub fn is_overlay_xattr_supported(path: &Path) -> bool {
         return false;
     }
 
-    let c_path = match CString::new(test_file.as_os_str().as_encoded_bytes()) {
-        Ok(c) => c,
-        Err(_) => {
-            let _ = remove_file(&test_file);
-            return false;
-        }
-    };
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        // Use a closure to easily handle early returns/errors via ?
+        let check_impl = || -> Result<bool> {
+            lsetxattr(
+                &test_file,
+                OVERLAY_TEST_XATTR,
+                b"y",
+                XattrFlags::empty(),
+            )?;
+            let val = lgetxattr(&test_file, OVERLAY_TEST_XATTR)?;
+            Ok(val == b"y")
+        };
 
-    let c_key = CString::new(OVERLAY_TEST_XATTR).unwrap();
-    let c_val = CString::new("y").unwrap();
-
-    let supported = unsafe {
-        let ret = libc::lsetxattr(
-            c_path.as_ptr(),
-            c_key.as_ptr(),
-            c_val.as_ptr() as *const libc::c_void,
-            c_val.as_bytes().len(),
-            0,
-        );
-        if ret != 0 {
-            let err = std::io::Error::last_os_error();
-            log::debug!("XATTR Check: trusted.* xattr not supported: {}", err);
-            false
-        } else {
-            let mut buf = [0u8; 16];
-            let get_ret = libc::lgetxattr(
-                c_path.as_ptr(),
-                c_key.as_ptr(),
-                buf.as_mut_ptr() as *mut libc::c_void,
-                buf.len(),
-            );
-
-            if get_ret > 0 {
-                let data = &buf[..get_ret as usize];
-                if data == c_val.as_bytes() {
-                    true
-                } else {
-                    log::warn!("XATTR Check: verification failed (content mismatch)");
-                    false
-                }
-            } else {
-                let err = std::io::Error::last_os_error();
-                log::warn!("XATTR Check: set success but get failed: {}", err);
+        let supported = match check_impl() {
+            Ok(true) => true,
+            Ok(false) => {
+                log::warn!("XATTR Check: verification failed (content mismatch)");
                 false
             }
-        }
-    };
+            Err(e) => {
+                // If it's not supported, it will likely error here
+                log::debug!("XATTR Check: trusted.* xattr not supported: {}", e);
+                false
+            }
+        };
 
-    let _ = remove_file(test_file);
-    supported
+        let _ = remove_file(test_file);
+        supported
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = remove_file(test_file);
+        false
+    }
 }
 
 pub fn is_mounted<P: AsRef<Path>>(path: P) -> bool {
