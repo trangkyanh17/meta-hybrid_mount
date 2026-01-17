@@ -99,6 +99,8 @@ pub fn diagnose_plan(plan: &MountPlan) -> Vec<DiagnosticIssue> {
 }
 
 pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionResult> {
+    let mut magic_queue = plan.magic_module_paths.clone();
+
     let mut global_success_map: HashMap<PathBuf, HashSet<String>> = HashMap::new();
 
     let mut final_overlay_ids = HashSet::new();
@@ -196,6 +198,8 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
         .collect();
 
     for res in overlay_results {
+        magic_queue.extend(res.magic_roots);
+
         for id in res.fallback_ids {
             final_overlay_ids.remove(&id);
         }
@@ -208,21 +212,22 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
         }
     }
 
-    let mut magic_queue = plan.magic_module_ids.clone();
-
     magic_queue.sort();
+
     magic_queue.dedup();
 
     let mut final_magic_ids = Vec::new();
+    let mut magic_need_ids = HashSet::new();
+
+    for path in &magic_queue {
+        if let Some(name) = path.file_name() {
+            let name_str = name.to_string_lossy().to_string();
+            final_magic_ids.push(name_str.clone());
+            magic_need_ids.insert(name_str);
+        }
+    }
 
     if !magic_queue.is_empty() {
-        let ids = {
-            let mut id = HashSet::new();
-            for i in magic_queue {
-                id.insert(i);
-            }
-            id
-        };
         let tempdir = PathBuf::from(&config.hybrid_mnt_dir).join("magic_workspace");
         let _ = crate::try_umount::TMPFS.set(tempdir.to_string_lossy().to_string());
 
@@ -242,7 +247,7 @@ pub fn execute(plan: &MountPlan, config: &config::Config) -> Result<ExecutionRes
             module_dir,
             &config.mountsource,
             &config.partitions,
-            ids,
+            magic_need_ids,
             !config.disable_umount,
         ) {
             log::error!("Magic Mount critical failure: {:#}", e);
