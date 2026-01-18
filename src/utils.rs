@@ -1,7 +1,7 @@
 use std::{
     ffi::CString,
-    fs::{self, File, create_dir_all, remove_dir_all, remove_file, write},
-    io::Write,
+    fs::{self, File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
+    io::{Read, Write},
     os::unix::{
         ffi::OsStrExt,
         fs::{FileTypeExt, MetadataExt, PermissionsExt, symlink},
@@ -86,20 +86,47 @@ pub fn init_logging(verbose: bool) -> Result<()> {
     Ok(())
 }
 
+fn get_secure_random_hex(len: usize) -> String {
+    let mut buf = vec![0u8; len];
+    let mut file = match File::open("/dev/urandom") {
+        Ok(f) => f,
+        Err(_) => {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let pid = std::process::id();
+            return format!("{:x}{:x}", pid, now).chars().take(len * 2).collect();
+        }
+    };
+
+    if file.read_exact(&mut buf).is_err() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        return format!("{:x}", now).chars().take(len * 2).collect();
+    }
+
+    buf.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, content: C) -> Result<()> {
     let path = path.as_ref();
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let pid = std::process::id();
-    let temp_name = format!(".{}_{}.tmp", pid, now);
+    // Use cryptographically secure random name to prevent prediction/collisions
+    let random_suffix = get_secure_random_hex(6);
+    let temp_name = format!(".tmp_{}", random_suffix);
     let temp_file = dir.join(temp_name);
 
     {
-        let mut file = File::create(&temp_file)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_file)
+            .with_context(|| format!("Failed to create temp file: {}", temp_file.display()))?;
+
         file.write_all(content.as_ref())?;
         file.sync_all()?;
     }
@@ -633,4 +660,46 @@ pub fn prune_empty_dirs<P: AsRef<Path>>(root: P) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_atomic_write_creates_file() {
+        let dir = std::env::temp_dir().join("test_atomic_write");
+        fs::create_dir_all(&dir).unwrap();
+        let file_path = dir.join("test_file.txt");
+        let content = b"Hello, World!";
+
+        // Clean up before test
+        if file_path.exists() {
+            fs::remove_file(&file_path).unwrap();
+        }
+
+        atomic_write(&file_path, content).unwrap();
+
+        assert!(file_path.exists());
+        let read_content = fs::read(&file_path).unwrap();
+        assert_eq!(read_content, content);
+
+        // Test overwrite
+        let new_content = b"New Content";
+        atomic_write(&file_path, new_content).unwrap();
+        let read_new_content = fs::read(&file_path).unwrap();
+        assert_eq!(read_new_content, new_content);
+
+        // Clean up
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_secure_random_hex() {
+        let hex1 = get_secure_random_hex(8);
+        let hex2 = get_secure_random_hex(8);
+        assert_eq!(hex1.len(), 16);
+        assert_ne!(hex1, hex2);
+    }
 }
