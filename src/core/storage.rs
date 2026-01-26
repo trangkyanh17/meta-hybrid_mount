@@ -193,7 +193,7 @@ pub fn setup(
 
 fn try_setup_tmpfs(target: &Path, mount_source: &str) -> Result<bool> {
     if utils::mount_tmpfs(target, mount_source).is_ok() {
-        if utils::is_overlay_xattr_supported(target) {
+        if utils::is_overlay_xattr_supported().unwrap_or(false) {
             log::info!("Tmpfs mounted and supports xattrs (CONFIG_TMPFS_XATTR=y).");
             return Ok(true);
         } else {
@@ -339,7 +339,7 @@ pub fn print_status() -> Result<()> {
     let mut supported_modes = vec!["ext4".to_string(), "erofs".to_string()];
     let check_dir = Path::new("/data/local/tmp/.mh_xattr_chk");
     if utils::mount_tmpfs(check_dir, "mh_check").is_ok() {
-        if utils::is_overlay_xattr_supported(check_dir) {
+        if utils::is_overlay_xattr_supported().unwrap_or(false) {
             supported_modes.insert(0, "tmpfs".to_string());
         }
         let _ = umount(check_dir, UnmountFlags::DETACH);

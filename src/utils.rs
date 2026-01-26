@@ -267,17 +267,34 @@ pub fn is_xattr_supported(path: &Path) -> bool {
     supported
 }
 
-pub fn is_overlay_xattr_supported(path: &Path) -> bool {
+pub fn is_overlay_xattr_supported() -> Result<bool> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
-        let mut buf = [0u8; 1];
-        !matches!(
-            rustix::fs::lgetxattr(path, "user.hybrid_check", &mut buf),
-            Err(rustix::io::Errno::OPNOTSUPP)
-        )
+        let output = Command::new("zcat")
+            .arg("/proc/config.gz")
+            .output()
+            .context("Failed to read config.gz")
+            .unwrap();
+        let config = String::from_utf8_lossy(&output.stdout);
+
+        for i in config.lines() {
+            if i.starts_with("#") {
+                continue;
+            }
+
+            let Some((k, v)) = i.split_once('=') else {
+                continue;
+            };
+
+            if k.trim() == "CONFIG_TMPFS_XATTR" && v.trim() == "y" {
+                return Ok(true);
+            }
+        }
+
+        return Ok(false);
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
-    true
+    Ok(true)
 }
 
 pub fn is_mounted<P: AsRef<Path>>(path: P) -> bool {
