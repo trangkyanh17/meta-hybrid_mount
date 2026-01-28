@@ -206,10 +206,10 @@ fn try_setup_tmpfs(target: &Path, mount_source: &str) -> Result<bool> {
 }
 
 fn setup_ext4_image(target: &Path, img_path: &Path, moduledir: &Path) -> Result<StorageHandle> {
-    if img_path.exists() {
-        if let Err(e) = fs::remove_file(img_path) {
-            log::warn!("Failed to remove old image: {}", e);
-        }
+    if img_path.exists()
+        && let Err(e) = fs::remove_file(img_path)
+    {
+        log::warn!("Failed to remove old image: {}", e);
     }
 
     let total_size = calculate_total_size(moduledir)?;
