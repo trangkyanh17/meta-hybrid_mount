@@ -67,10 +67,8 @@ pub fn perform_sync(modules: &[Module], target_base: &Path) -> Result<()> {
                 return;
             }
 
-            if backup_created {
-                if let Err(e) = fs::remove_dir_all(&dst_backup) {
-                    log::warn!("Failed to clean up backup for {}: {}", module.id, e);
-                }
+            if backup_created && let Err(e) = fs::remove_dir_all(&dst_backup) {
+                log::warn!("Failed to clean up backup for {}: {}", module.id, e);
             }
         } else {
             log::debug!("Skipping module: {}", module.id);

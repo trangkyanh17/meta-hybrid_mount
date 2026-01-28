@@ -34,7 +34,7 @@ pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, content: C) -> Resu
         file.write_all(content.as_ref())?;
     }
 
-    if let Err(e) = fs::rename(&temp_file, path) {
+    if let Err(_e) = fs::rename(&temp_file, path) {
         if let Err(copy_err) = fs::copy(&temp_file, path) {
             let _ = fs::remove_file(&temp_file);
             return Err(copy_err).context("atomic_write copy fallback failed");
@@ -156,20 +156,6 @@ pub fn sync_dir(src: &Path, dst: &Path, repair_context: bool) -> Result<()> {
             dst.display()
         )
     })
-}
-
-pub fn cleanup_temp_dir(temp_dir: &Path) {
-    if let Err(e) = fs::remove_dir_all(temp_dir) {
-        let _ = e;
-    }
-}
-
-pub fn ensure_temp_dir(temp_dir: &Path) -> Result<()> {
-    if temp_dir.exists() {
-        fs::remove_dir_all(temp_dir).ok();
-    }
-    fs::create_dir_all(temp_dir)?;
-    Ok(())
 }
 
 pub fn prune_empty_dirs<P: AsRef<Path>>(root: P) -> Result<()> {

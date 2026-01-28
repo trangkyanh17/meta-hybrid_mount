@@ -15,7 +15,6 @@ const CONTEXT_VENDOR: &str = "u:object_r:vendor_file:s0";
 const CONTEXT_HAL: &str = "u:object_r:same_process_hal_file:s0";
 const CONTEXT_VENDOR_EXEC: &str = "u:object_r:vendor_file:s0";
 const CONTEXT_ROOTFS: &str = "u:object_r:rootfs:s0";
-const XATTR_TEST_FILE: &str = ".xattr_test";
 
 fn copy_extended_attributes(src: &Path, dst: &Path) -> Result<()> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -94,31 +93,6 @@ pub fn lgetfilecon<P: AsRef<Path>>(_path: P) -> Result<String> {
     unimplemented!();
 }
 
-pub fn copy_path_context<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()> {
-    let mut context = if src.as_ref().exists() {
-        lgetfilecon(&src).unwrap_or_else(|_| CONTEXT_SYSTEM.to_string())
-    } else {
-        CONTEXT_SYSTEM.to_string()
-    };
-
-    if context.contains("u:object_r:rootfs:s0") {
-        context = CONTEXT_SYSTEM.to_string();
-    }
-
-    lsetfilecon(dst, &context)
-}
-
-pub fn is_xattr_supported(path: &Path) -> bool {
-    let test_file = path.join(XATTR_TEST_FILE);
-    if fs::write(&test_file, b"test").is_err() {
-        return false;
-    }
-    let result = lsetfilecon(&test_file, "u:object_r:system_file:s0");
-    let supported = result.is_ok();
-    let _ = fs::remove_file(test_file);
-    supported
-}
-
 pub fn is_overlay_xattr_supported() -> Result<bool> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
@@ -143,7 +117,7 @@ pub fn is_overlay_xattr_supported() -> Result<bool> {
             }
         }
 
-        return Ok(false);
+        Ok(false)
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     Ok(true)
